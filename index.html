@@ -397,6 +397,11 @@
     border:1px solid rgba(255,210,102,.7);background:rgba(30,20,6,.9);color:#ffd166;font-family:inherit;
     font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 0 18px rgba(255,200,80,.4)}
   .recruit-btn:hover{background:rgba(60,40,10,.95)}
+  .atk-mode{position:absolute;right:16px;bottom:292px;z-index:7;padding:8px 12px;border-radius:99px;
+    border:1px solid rgba(255,209,102,.6);background:rgba(30,20,6,.85);color:#ffd166;font-family:inherit;
+    font-size:12px;font-weight:800;cursor:pointer;display:none}
+  body.touch .atk-mode{display:block}
+  .atk-mode.manual{border-color:#ff7d95;color:#ffb3c2;background:rgba(50,10,20,.85)}
   .item-menu{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:12;min-width:180px;
     display:flex;flex-direction:column;gap:6px;padding:12px;border-radius:14px;background:rgba(8,14,26,.97);
     border:1px solid rgba(94,242,255,.35);box-shadow:0 18px 60px rgba(0,0,0,.6)}
@@ -465,6 +470,8 @@
     .bp-cell{font-size:8.5px}
     .dropzone{padding:10px;font-size:10px}
     .lb-row{grid-template-columns:30px 1fr 62px 70px;font-size:12px;padding:8px 10px}
+    .atk-mode{right:12px;bottom:286px;font-size:11px;padding:7px 11px}
+    .atk-mode.manual{box-shadow:0 0 14px rgba(255,90,120,.35)}
   }
 </style>
 </head>
@@ -534,6 +541,7 @@
   <button class="recruit-btn hidden" id="recruitBtn">招募</button>
   <div class="item-menu hidden" id="itemMenu"></div>
   <div class="err-badge hidden" id="errBadge"></div>
+  <button class="atk-mode" id="atkModeBtn">自动</button>
 
   <div id="overlay" class="show">
     <div class="panel" id="menuPanel">
@@ -1117,6 +1125,9 @@
   var pointer = { x: 0, y: 0, down: false, moved: false };
   var joy = { active: false, id: null, ox: 0, oy: 0, cx: 0, cy: 0, x: 0, y: 0 };
   var touchMode = false;
+  var manualAttack = false;
+  try { manualAttack = localStorage.getItem('neon_atk') === 'manual'; } catch (e) {}
+  var aimStick = { active: false, id: null, ox: 0, oy: 0, angle: 0 };
   var overTimer = 0;
 
   /* ---- 局内进度（可存档） ---- */
@@ -1990,6 +2001,7 @@
   ============================================================ */
   function aimAngle() {
     var p = player;
+    if (manualAttack && aimStick.active) { p.angle = aimStick.angle; return aimStick.angle; }
     var target = nearestEnemy(p.x, p.y, 900);
     var a;
     var assist = gun === 'rifle' ? (0.3 + rifleStats().assist) : 0.3;
@@ -2083,8 +2095,8 @@
     if (shieldUp) {
       // 举盾期间无法开火
     } else if (touchMode) {
-      if (hasTargets) autoFireTick();
-      if (gun === 'rifle' && ammo === 0 && hasTargets) {
+      if (hasTargets && !manualAttack) autoFireTick();
+      if (gun === 'rifle' && ammo === 0 && hasTargets && !manualAttack) {
         touchReloadT = touchReloadT < 0 ? 0.4 : touchReloadT - dt;
         if (touchReloadT <= 0) { touchReloadT = -1; reload(); }
       }
@@ -4269,6 +4281,9 @@
     if (!d || G.mode !== 'playing') return;
     d.moveCd = Math.max(0, d.moveCd - dt);
     if (G.pending.length || enemies.length || bosses.length) return;
+    for (var li = 0; li < npcs.length; li++) {
+      if (npcs[li].kind === 'weird' && npcs[li].angry) return;
+    }
     if (player.hp <= 0) return;
     var dirX = 0, dirY = 0;
     if (player.x < 30) dirX = -1;
@@ -4383,6 +4398,7 @@
 
   /* ---- NPC ---- */
   function spawnNpc(kind, x, y, opts) {
+    opts = opts || {};
     opts = opts || {};
     var n = {
       kind: kind, x: x, y: y, r: opts.r || 16,
@@ -4593,7 +4609,12 @@
           return;
         }
       }
-      var hostile = n.kind === 'neutral' || n.angry;
+      var hostile = n.angry || (n.kind === 'neutral' && n.defending);
+      if (n.kind === 'neutral' && n.defending) {
+        var mdx = player.x - n.x, mdy = player.y - n.y;
+        var md = Math.hypot(mdx, mdy) || 1;
+        if (md > 160) { n.x += (mdx / md) * 42 * dt; n.y += (mdy / md) * 42 * dt; }
+      }
       if (hostile) {
         var d = Math.hypot(player.x - n.x, player.y - n.y);
         if (n.angry) {
@@ -4650,6 +4671,7 @@
   }
 
   function damageNpc(n, dmg, bx, by) {
+    if (n.kind === 'neutral') { n.defending = true; }
     // 怪异 NPC 答对后进入“平静”状态：再被任何武器打到就会发狂
     if (n.kind === 'weird' && n.peaceful && !n.angry) {
       n.peaceful = false;
@@ -6383,7 +6405,7 @@
   }
 
   function update(dt) {
-    if (MP.role === 'guest') { updateGuest(dt); return; }
+    if (MP.role === 'guest') { updateGuest(dt); updateManualAim(dt); return; }
     G.t += dt;
     G.shake *= Math.exp(-7 * dt);
     if (G.shake < 0.1) G.shake = 0;
@@ -6413,6 +6435,16 @@
     updatePopups(dt);
     dungeonEdgeCheck(dt);
     updateRecruitBtn();
+    updateManualAim(dt);
+    if (MP.role === 'host' && MP.remote) {
+      var rr2 = Math.min(1, dt * 16);
+      if (MP.remote.tx !== undefined) {
+        MP.remote.x += (MP.remote.tx - MP.remote.x) * rr2;
+        MP.remote.y += (MP.remote.ty - MP.remote.y) * rr2;
+        var da2 = Math.atan2(Math.sin(MP.remote.ta - MP.remote.angle), Math.cos(MP.remote.ta - MP.remote.angle));
+        MP.remote.angle += da2 * rr2;
+      }
+    }
     updateHostNet(dt);
 
     if (G.combo > 1) {
@@ -7328,6 +7360,7 @@
     drawEmbedFlash();
     drawCleanupTimer();
     drawJoystick();
+    drawAimStick();
     drawReticle();
 
     if (G.hurt > 0.01) {
@@ -7615,7 +7648,15 @@
     document.body.classList.add('touch');
     touchReloadT = -1;    for (var i = 0; i < e.changedTouches.length; i++) {
       var t = e.changedTouches[i];
-      if (!joy.active && t.clientX < W * 0.62 && G.mode === 'playing') {
+      if (manualAttack && !aimStick.active && t.clientX >= W * 0.5 && G.mode === 'playing') {
+        aimStick.active = true;
+        aimStick.id = t.identifier;
+        aimStick.ox = t.clientX;
+        aimStick.oy = t.clientY;
+        aimStick.angle = -Math.PI / 2;
+        continue;
+      }
+      if (!joy.active && !manualAttack && t.clientX < W * 0.62 && G.mode === 'playing') {
         joy.active = true;
         joy.id = t.identifier;
         joy.ox = t.clientX;
@@ -7634,6 +7675,10 @@
     e.preventDefault();
     for (var i = 0; i < e.changedTouches.length; i++) {
       var t = e.changedTouches[i];
+      if (aimStick.active && t.identifier === aimStick.id) {
+        aimStick.angle = Math.atan2(t.clientY - aimStick.oy, t.clientX - aimStick.ox);
+        continue;
+      }
       if (joy.active && t.identifier === joy.id) {
         var dx = t.clientX - joy.ox;
         var dy = t.clientY - joy.oy;
@@ -7650,6 +7695,11 @@
   function endTouch(e) {
     for (var i = 0; i < e.changedTouches.length; i++) {
       var t = e.changedTouches[i];
+      if (aimStick.active && t.identifier === aimStick.id) { aimStick.active = false; aimStick.id = null; }
+      if (aimStick.active && t.identifier === aimStick.id) {
+        aimStick.angle = Math.atan2(t.clientY - aimStick.oy, t.clientX - aimStick.ox);
+        continue;
+      }
       if (joy.active && t.identifier === joy.id) {
         joy.active = false;
         joy.id = null;
@@ -7808,6 +7858,21 @@
     this.blur();
   });
   $('bagBtn').addEventListener('click', function () { this.blur(); openBag(); });
+  function syncAtkBtn() {
+    var b = $('atkModeBtn');
+    if (!b) return;
+    b.textContent = manualAttack ? '手动' : '自动';
+    b.classList.toggle('manual', manualAttack);
+  }
+  $('atkModeBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    manualAttack = !manualAttack;
+    try { localStorage.setItem('neon_atk', manualAttack ? 'manual' : 'auto'); } catch (err) {}
+    aimStick.active = false;
+    syncAtkBtn();
+    this.blur();
+  });
+  syncAtkBtn();
   ui.meleeBtn.addEventListener('pointerdown', function (e) {
     e.preventDefault();
     initAudio();
@@ -7916,9 +7981,10 @@
       }
     } else if (d.t === 'i' && MP.role === 'host') {
       if (!MP.remote) MP.remote = { x: d.x, y: d.y, angle: d.a || 0, hp: 5, maxHp: 5, r: 13 };
-      MP.remote.x = d.x;
-      MP.remote.y = d.y;
-      MP.remote.angle = d.a || 0;
+      MP.remote.tx = d.x;
+      MP.remote.ty = d.y;
+      MP.remote.ta = d.a || 0;
+      if (MP.remote.x === undefined) { MP.remote.x = d.x; MP.remote.y = d.y; MP.remote.angle = d.a || 0; }
       MP.remote.hp = d.hp;
     } else if (d.t === 'ans' && MP.role === 'host') {
       if (MP.quiz && !MP.quiz.done) { MP.quiz.guestOk = !!d.ok; mpQuizResolve(); }
@@ -7985,6 +8051,30 @@
       enemies.length = 0;
       Array.prototype.push.apply(enemies, list);
     }
+    if (d.np) {
+      npcs.length = 0;
+      for (var ni2 = 0; ni2 < d.np.length; ni2++) {
+        var qn = d.np[ni2];
+        npcs.push({
+          kind: qn.k, x: qn.x, y: qn.y, r: qn.r || 16, hp: qn.hp, maxHp: qn.hp, shield: qn.sh || 0,
+          angry: !!qn.an, charging: !!qn.ch, aim: 0, look: 0, name: qn.nm || '???',
+          bubble: qn.bub || '', bubbleT: qn.bt || 0, dead: false, offer: null, recruited: false,
+          color: qn.k === 'friendly' ? '#57ffc0' : (qn.k === 'neutral' ? '#ffffff' : '#ff7bf0')
+        });
+      }
+    }
+    if (d.bo) {
+      bosses.length = 0;
+      for (var bi2 = 0; bi2 < d.bo.length; bi2++) {
+        var qb = d.bo[bi2];
+        bosses.push({
+          kind: qb.k || 'butcher', idx: 0, name: qb.nm || 'BOSS', color: qb.c || '#ff4d6d',
+          x: qb.x, y: qb.y, vx: 0, vy: 0, r: qb.r || 40, hp: qb.hp, maxHp: qb.mhp || qb.hp,
+          dmg: 0, t: 0, flash: 0, phase: 1, fireCd: 99, fireCd2: 99, summonT: 99,
+          state: 'idle', timer: 0, chargeAng: 0, rage: false, twin: null, pairId: 0
+        });
+      }
+    }
     if (d.pk) {
       pickups.length = 0;
       for (var pi = 0; pi < d.pk.length; pi++) {
@@ -8026,7 +8116,7 @@
     updateShells(dt);
     updateExplosions(dt);
     MP.sendT += dt;
-    if (MP.sendT > 0.05 && MP.conn && MP.conn.open) {
+    if (MP.sendT > 0.033 && MP.conn && MP.conn.open) {
       MP.sendT = 0;
       MP.conn.send({ t: 'i', x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2), hp: player.hp });
     }
@@ -8059,6 +8149,17 @@
       if (!pp.uid) pp.uid = ++MP.uid;
       pk.push({ u: pp.uid, t: pp.type, x: Math.round(pp.x), y: Math.round(pp.y), r: pp.r, v: pp.value, a: pp.attrId, w: pp.weapon, l: pp.label });
     }
+    var np = [];
+    for (var ni = 0; ni < Math.min(npcs.length, 8); ni++) {
+      var nq = npcs[ni];
+      if (!nq || nq.dead) continue;
+      np.push({ k: nq.kind, x: Math.round(nq.x), y: Math.round(nq.y), r: nq.r, hp: nq.hp, sh: Math.round(nq.shield || 0), an: nq.angry ? 1 : 0, ch: nq.charging ? 1 : 0, nm: nq.name, bub: nq.bubble || '', bt: Math.round((nq.bubbleT || 0) * 10) / 10 });
+    }
+    var bo = [];
+    for (var bi = 0; bi < bosses.length; bi++) {
+      var bb = bosses[bi];
+      bo.push({ x: Math.round(bb.x), y: Math.round(bb.y), r: bb.r, hp: Math.round(bb.hp), mhp: Math.round(bb.maxHp), c: bb.color, nm: bb.name, k: bb.kind });
+    }
     MP.conn.send({
       t: 's',
       floor: G.stage,
@@ -8067,8 +8168,51 @@
       g: MP.remote ? { hp: MP.remote.hp, mhp: MP.remote.maxHp } : null,
       en: en,
       bu: bu,
-      pk: pk
+      pk: pk,
+      np: np,
+      bo: bo
     });
+  }
+
+  function updateManualAim(dt) {
+    if (!manualAttack || !aimStick.active || G.mode !== 'playing') return;
+    player.angle = aimStick.angle;
+    player.drawAngle = aimStick.angle;
+    if (!shieldUp) autoFireTick();
+    if (gun === 'rifle' && ammo === 0) {
+      touchReloadT = touchReloadT < 0 ? 0.4 : touchReloadT - dt;
+      if (touchReloadT <= 0) { touchReloadT = -1; reload(); }
+    }
+  }
+
+  function drawAimStick() {
+    if (!aimStick.active) return;
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    ctx.strokeStyle = '#ffd166';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(aimStick.ox, aimStick.oy, 58, 0, TAU);
+    ctx.stroke();
+    ctx.globalAlpha = 0.28;
+    ctx.beginPath();
+    ctx.arc(aimStick.ox, aimStick.oy, 58, 0, TAU);
+    ctx.fillStyle = '#ffd166';
+    ctx.fill();
+    ctx.globalAlpha = 0.95;
+    var kx = aimStick.ox + Math.cos(aimStick.angle) * 40;
+    var ky = aimStick.oy + Math.sin(aimStick.angle) * 40;
+    ctx.fillStyle = '#ffd166';
+    ctx.beginPath();
+    ctx.arc(kx, ky, 16, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,209,102,.85)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(aimStick.ox, aimStick.oy);
+    ctx.lineTo(aimStick.ox + Math.cos(aimStick.angle) * 150, aimStick.oy + Math.sin(aimStick.angle) * 150);
+    ctx.stroke();
+    ctx.restore();
   }
 
   function drawRemote() {
