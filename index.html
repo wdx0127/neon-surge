@@ -1116,6 +1116,7 @@
   var meleeCd = 0;
   var reloadT = 0;
   var xrayHeat = 0, xrayLock = false, xrayBeam = 0;
+  var XRAY_MAX = 100, XRAY_FIRE = 26, XRAY_COOL = 12, XRAY_IDLE = 40, XRAY_LOCK_COOL = 55;
   var meleeT = 0;
   var shieldUp = false, shieldLeft = 0;
   var fistCharging = false, fistCharge = 0, fistHold = false;
@@ -1641,27 +1642,29 @@
   function updateXray(dt) {
     if (G.mode !== 'playing') return;
     if (gun !== 'xray') {
-      xrayHeat = Math.max(0, xrayHeat - dt * 0.5);
+      xrayHeat = Math.max(0, xrayHeat - dt * XRAY_IDLE);
       xrayBeam = Math.max(0, xrayBeam - dt * 4);
-      if (xrayHeat <= 0.25) xrayLock = false;
+      if (xrayHeat <= 25) xrayLock = false;
       return;
     }
     if (xrayLock) {
-      xrayHeat = Math.max(0, xrayHeat - dt * 0.55);
+      xrayHeat = Math.max(0, xrayHeat - dt * XRAY_LOCK_COOL);
       xrayBeam = 0;
-      if (xrayHeat <= 0.25) xrayLock = false;
+      if (xrayHeat <= 25) xrayLock = false;
       return;
     }
     var firing = (pointer.down && !shieldUp) || (touchMode && !shieldUp && (enemies.length > 0 || bosses.length > 0));
     if (!firing) {
-      xrayHeat = Math.max(0, xrayHeat - dt * 0.5);
+      // 不射击时快速散热
+      xrayHeat = Math.max(0, xrayHeat - dt * XRAY_IDLE);
       xrayBeam = Math.max(0, xrayBeam - dt * 6);
       return;
     }
     xrayBeam = 1;
-    xrayHeat += dt * 0.38;
-    var over = xrayHeat > 0.85;
-    if (xrayHeat >= 1) { xrayHeat = 1; xrayLock = true; sfx('deny'); }
+    // 射击时也在持续散热：净升温 = 发热 - 被动散热
+    xrayHeat += (XRAY_FIRE - XRAY_COOL) * dt;
+    var over = xrayHeat > 85;
+    if (xrayHeat >= XRAY_MAX) { xrayHeat = XRAY_MAX; xrayLock = true; sfx('deny'); }
     var a = player.angle;
     var len = 920;
     var ex = player.x + Math.cos(a) * len;
@@ -1695,7 +1698,7 @@
 
   function drawXray() {
     if (gun !== 'xray' || xrayBeam <= 0 || G.mode !== 'playing') return;
-    var over = xrayHeat > 0.85;
+    var over = xrayHeat > 85;
     var a = player.angle;
     var len = 920;
     ctx.save();
@@ -7435,7 +7438,7 @@
 
     // ---- 武器卡 ----
     if (gun !== 'rifle' && !WDEF[gun]) { gun = run.primary || 'rifle'; ammo = magSize(); }
-    var gunSig = gun + '|' + ammo + '|' + Math.round(xrayHeat * 20) + (xrayLock ? 'L' : '');
+    var gunSig = gun + '|' + ammo + '|' + Math.round(xrayHeat / 5) + (xrayLock ? 'L' : '');
     if (hudCache.gun !== gunSig) {
       hudCache.gun = gunSig;
       ui.gunIcon.textContent = rangedIcon(gun);
@@ -7445,8 +7448,8 @@
         ui.gunAmmo.textContent = reloadT > 0 ? ('换弹中 ' + reloadT.toFixed(1) + 's') : (ammo + ' / ' + magSize());
       } else if (gun === 'xray') {
         ui.gunAmmo.textContent = xrayLock
-          ? ('过热冷却 ' + Math.round(xrayHeat * 100) + '%')
-          : ('热量 ' + Math.round(xrayHeat * 100) + '%');
+          ? ('过热冷却 ' + Math.round(xrayHeat) + '%')
+          : ('热量 ' + Math.round(xrayHeat) + '%');
         ui.gunCard.classList.toggle('empty', xrayLock);
       } else {
         ui.gunAmmo.textContent = '无限弹药';
