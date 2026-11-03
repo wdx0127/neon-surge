@@ -560,7 +560,7 @@
         <div><b>WASD / ↑↓←→</b><span>移动</span></div>
         <div><b>鼠标左键</b><span>射击（步枪/线圈需连点）</span></div>
         <div><b>滚轮</b><span>切换主 / 副武器</span></div>
-        <div><b>空格</b><span>近战（热熔刀 / 虚空盾 / 蓄意轰拳）</span></div>
+        <div><b>空格</b><span>近战（热熔刀 / 虚空盾 / 蓄意崩拳）</span></div>
         <div><b>Q</b><span>切换近战武器</span></div>
         <div><b>R</b><span>换弹（瞬间完成）</span></div>
         <div><b>Shift / 右键</b><span>冲刺（短暂无敌）</span></div>
@@ -1200,7 +1200,7 @@
   var MDEF = {
     blade:  { name: '热熔刀',   icon: '刀', price: 0,   desc: '扇形挥砍 · 格挡弹幕 · 冷却3s', cd: 3 },
     shield: { name: '虚空盾',   icon: '盾', price: 400, desc: '举盾3s · 前方90°免疫 · 冷却5s', cd: 5 },
-    fist:   { name: '蓄意轰拳', icon: '拳', price: 600, desc: '蓄力1.5s · 毁灭性冲击 · 冷却20s', cd: 20 }
+    fist:   { name: '蓄意崩拳', icon: '拳', price: 600, desc: '蓄力1.5s · 毁灭性冲击 · 冷却20s', cd: 20 }
   };
 
   /* ---- Boss ---- */
@@ -1258,7 +1258,7 @@
     { id: 'w-smg',     name: '裂变冲锋枪「蜂群」', price: 520, kind: 'weapon', desc: WDEF.smg.desc + '（入背包，可装备到主/副武器栏）', icon: WDEF.smg.icon, max: 1 },
     { id: 'w-xray',    name: 'X射线枪', price: 420, kind: 'weapon', desc: WDEF.xray.desc + '（入背包，可装备到主/副武器栏）', icon: WDEF.xray.icon, max: 1 },
     { id: 'm-shield', name: '虚空盾',        price: 400, kind: 'melee', desc: MDEF.shield.desc, icon: MDEF.shield.icon, max: 1 },
-    { id: 'm-fist',   name: '蓄意轰拳',      price: 600, kind: 'melee', desc: MDEF.fist.desc, icon: MDEF.fist.icon, max: 1 },
+    { id: 'm-fist',   name: '蓄意崩拳',      price: 600, kind: 'melee', desc: MDEF.fist.desc, icon: MDEF.fist.icon, max: 1 },
     { id: 'mat-hp',   name: '合金板',        price: 190, kind: 'mat',   desc: '材料：生命上限 +1（可叠加）', icon: '板', max: 5, uses: function () { return run.matHp; } },
     { id: 'mat-spd',  name: '神经加速剂',    price: 170, kind: 'mat',   desc: '材料：移速 +5%（可叠加）', icon: '剂', max: 4, uses: function () { return run.matSpd; } },
     { id: 'mat-heal', name: '纳米修复胶',    price: 80,  kind: 'mat',   desc: '材料：立即回满生命', icon: '胶', max: Infinity }
@@ -1360,7 +1360,7 @@
     '“这玩意我认识，上周刚从我这儿偷走的。”'
   ];
 
-  var PUNCH_LINES = ['爱你老妈明天见！', '腕豪的腕，腕豪的豪！'];
+  var PUNCH_LINES = ['爱你老爸明天见！'];
 
   /* ---- 剧情对话：每关一段（主角 × Echo） ---- */
   var STORY_BEATS = [
@@ -1811,7 +1811,7 @@
   }
 
   /* ============================================================
-     近战：热熔刀 / 虚空盾 / 蓄意轰拳
+     近战：热熔刀 / 虚空盾 / 蓄意崩拳
   ============================================================ */
   function tryBlade() {
     if (meleeCd > 0) return;
