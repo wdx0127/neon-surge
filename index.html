@@ -5634,6 +5634,25 @@
     ctx.restore();
   }
 
+  function drawMiniBadge(text, color) {
+    var w = 132, h = 34;
+    var x = W - w - 16, y = W < 520 ? 206 : 162;
+    ctx.save();
+    ctx.fillStyle = 'rgba(4,8,16,0.62)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = '800 13px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + w / 2, y + h / 2 + 1);
+    ctx.restore();
+  }
+
   function drawBubble(x, y, text, alpha) {
     if (alpha <= 0) return;
     var lines = String(text).split('\n');
@@ -7594,7 +7613,11 @@
     drawPopups();
     ctx.restore();
 
-    if (dungeonActive() && !G.hiddenRoom) drawMinimap();
+    if (dungeonActive() && !G.hiddenRoom && !G.bossMode && !(MP.role === 'guest' && MP.hostBoss)) {
+      drawMinimap();
+    } else if (G.hiddenRoom || G.bossMode || (MP.role === 'guest' && MP.hostBoss)) {
+      drawMiniBadge(G.bossMode ? 'B O S S' : (MP.role === 'guest' ? '协 战' : '？？？？'), G.bossMode ? '#ff4d6d' : '#b9a8ff');
+    }
     drawLoading();
     drawEmbedFlash();
     drawCleanupTimer();
@@ -8348,6 +8371,7 @@
       if (player.hp <= 0) player.hp = 0;
     }
     if (typeof d.floor === 'number') G.stage = d.floor;
+    if (d.bm !== undefined) MP.hostBoss = !!d.bm;
     if (d.cur && G.dungeon) G.dungeon.cur = d.cur;
     // 敌人
     if (d.en) {
@@ -8482,6 +8506,7 @@
       floor: G.stage,
       cur: G.dungeon ? G.dungeon.cur : null,
       h: { x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2), hp: player.hp, mhp: player.maxHp },
+      bm: G.bossMode ? 1 : 0,
       g: MP.remote ? { hp: MP.remote.hp, mhp: MP.remote.maxHp } : null,
       en: en,
       bu: bu,
