@@ -28,6 +28,7 @@
   #hud.show{opacity:1}
   .hud-left{position:absolute;top:18px;left:20px}
   .hearts{display:flex;gap:5px;height:24px}
+  .heart-more{font-size:12px;color:#ffd166;margin-left:6px;font-weight:800;vertical-align:middle}
   .heart{font-size:21px;line-height:24px;color:#ff5f8f;text-shadow:0 0 10px rgba(255,61,127,.9);transition:color .2s,opacity .2s}
   .heart.off{color:#28304a;text-shadow:none;opacity:.7}
   .dash{display:flex;align-items:center;gap:8px;margin-top:6px}
@@ -5406,10 +5407,27 @@
       G.bossLineT = rand(5, 8);
     }
     if (player.hp > player.maxHp) player.hp = player.maxHp;
+    // 客机也会被敌潮撕咬：靠近的敌人越多掉血越快
+    if (MP.remote && !MP.remote.dead) {
+      var near = 0;
+      for (var i = 0; i < enemies.length; i++) {
+        if (Math.hypot(enemies[i].x - MP.remote.x, enemies[i].y - MP.remote.y) < 115) near++;
+      }
+      if (near > 0) {
+        MP.remote.hp -= Math.min(3, near) * dt * 1.1;
+        if (MP.remote.hp <= 0) {
+          MP.remote.hp = 0;
+          MP.remote.dead = true;
+          MP.send({ t: 'p2dead' });
+          popups.push({ x: MP.remote.x, y: MP.remote.y - 40, text: 'P2 已倒下', color: '#ff9fb4', life: 2.2, max: 2.2, size: 16, vy: -30 });
+        }
+      }
+    }
   }
 
   function showBossEnding() {
     G.mode = 'dead';
+    if (MP.role === 'host' && MP.connected) MP.send({ t: 'bossdead' });
     var p2 = $('overPanel');
     var title = p2.querySelector('.end-title');
     if (title) title.textContent = 'B O S S · 终';
@@ -7437,6 +7455,17 @@
     drawAlly();
     drawShield();
     drawPlayer();
+    if (MP.role === 'guest' && MP.guestDead) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      ctx.fillRect(0, H * 0.5 - 26, W, 52);
+      ctx.fillStyle = '#ff9fb4';
+      ctx.font = '800 16px "Segoe UI", system-ui, "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('你已阵亡 · 观战中', W / 2, H * 0.5);
+      ctx.restore();
+    }
     if (G.bossMode && G.bossLineT > 0 && G.bossLine) {
       var ba = G.bossLineT > 1.2 ? 1 : Math.max(0, G.bossLineT / 1.2);
       drawBubble(player.x, player.y - 66, G.bossLine, ba);
@@ -7477,10 +7506,16 @@
   var hudCache = { score: -1, best: -1, wave: -1, hp: -1, combo: -1, dash: -1, buffs: '', gun: '', melee: -1, meleeSig: '', allySig: '', credits: -1, bossSig: '' };
 
   function renderHearts() {
+    var max = Math.ceil(player.maxHp);
+    var shown = Math.min(12, max);
+    var filled = max > 12
+      ? Math.round(shown * clamp(player.hp / max, 0, 1))
+      : Math.min(Math.ceil(player.hp), shown);
     var html = '';
-    for (var i = 0; i < player.maxHp; i++) {
-      html += '<span class="heart' + (i < player.hp ? '' : ' off') + '">♥</span>';
+    for (var i = 0; i < shown; i++) {
+      html += '<span class="heart' + (i < filled ? '' : ' off') + '">♥</span>';
     }
+    if (max > 12) html += '<span class="heart-more">' + Math.ceil(player.hp) + '</span>';
     ui.hearts.innerHTML = html;
   }
 
@@ -8017,7 +8052,7 @@
   /* ============================================================
      联机（P2P · 房主权威）
   ============================================================ */
-  var MP = { role: null, peer: null, conn: null, connected: false, remote: null, snap: null, sendT: 0, snapT: 0, hostId: '', uid: 0, quiz: null };
+  var MP = { role: null, peer: null, conn: null, connected: false, remote: null, snap: null, sendT: 0, snapT: 0, hostId: '', uid: 0, quiz: null, guestDead: false };
   MP.send = function (o) { if (MP.conn && MP.conn.open) MP.conn.send(o); };
 
   function mpStatus(txt) { var el = $('mpStatus'); if (el) el.textContent = txt; }
@@ -8101,7 +8136,14 @@
       MP.remote.ty = d.y;
       MP.remote.ta = d.a || 0;
       if (MP.remote.x === undefined) { MP.remote.x = d.x; MP.remote.y = d.y; MP.remote.angle = d.a || 0; }
-      MP.remote.hp = d.hp;
+      if (!G.bossMode) MP.remote.hp = d.hp;
+      if (d.mhp) MP.remote.maxHp = d.mhp;
+    } else if (d.t === 'p2dead' && MP.role === 'guest') {
+      MP.guestDead = true;
+      player.hp = 0;
+      showBanner('你已阵亡', '观战中 · 等待房主');
+    } else if (d.t === 'bossdead' && MP.role === 'guest') {
+      if (typeof showBossEnding === 'function') showBossEnding();
     } else if (d.t === 'relic') {
       if (d.kind === 'break') {
         G.score += 999999;
@@ -8232,6 +8274,11 @@
   }
 
   function updateGuest(dt) {
+    if (MP.guestDead) {
+      updateParticles(dt);
+      updatePopups(dt);
+      return;
+    }
     updatePlayer(dt);
     guestPickupCheck();
     updateBullets(dt);
@@ -8242,7 +8289,7 @@
     MP.sendT += dt;
     if (MP.sendT > 0.033 && MP.conn && MP.conn.open) {
       MP.sendT = 0;
-      MP.conn.send({ t: 'i', x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2), hp: player.hp });
+      MP.conn.send({ t: 'i', x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2), hp: player.hp, mhp: player.maxHp });
     }
     if (G.combo > 1) { G.comboT -= dt; if (G.comboT <= 0) G.combo = 1; }
   }
