@@ -2861,7 +2861,7 @@
     if (dr > 0) dmg = Math.max(1, dmg * (1 - dr));
     dmg = dmg * attrBonus().taken;
     player.hp -= dmg;
-    player.invuln = 1.4;
+    player.invuln = G.bossMode ? 0.08 : 1.4;
     G.combo = 1;
     G.comboT = 0;
     G.hurt = 1;
@@ -5393,11 +5393,11 @@
   }
 
   var BOSS_FORM_DEFS = {
-    butcher: { name: '屠夫·血链', color: '#ff3d5c', primary: 'spread', skill: 'charge', skillName: '链锯冲锋', cd: 6 },
-    goliath: { name: '歌利亚·紫晶炮台', color: '#c07bff', primary: 'ring', skill: 'heavy', skillName: '重型齐射', cd: 5 },
-    reaper:  { name: '相位收割者', color: '#9be7ff', primary: 'triple', skill: 'blink', skillName: '相位闪现', cd: 4 },
-    queen:   { name: '蜂巢女王', color: '#ffb347', primary: 'fan', skill: 'nova', skillName: '蜂群新星', cd: 7 },
-    eye:     { name: '深渊之眼', color: '#ffd166', primary: 'pierce', skill: 'burst', skillName: '凝视爆发', cd: 6 }
+    butcher: { name: '屠夫·血链', color: '#ff3d5c', primary: 'spread', skill: 'charge', skillName: '链锯冲锋', cd: 4.5 },
+    goliath: { name: '歌利亚·紫晶炮台', color: '#c07bff', primary: 'ring', skill: 'heavy', skillName: '重型齐射', cd: 4 },
+    reaper:  { name: '相位收割者', color: '#9be7ff', primary: 'triple', skill: 'blink', skillName: '相位闪现', cd: 3 },
+    queen:   { name: '蜂巢女王', color: '#ffb347', primary: 'fan', skill: 'nova', skillName: '蜂群新星', cd: 5.5 },
+    eye:     { name: '深渊之眼', color: '#ffd166', primary: 'pierce', skill: 'burst', skillName: '凝视爆发', cd: 4.5 }
   };
   var BOSS_FORM_KEYS = ['butcher', 'goliath', 'reaper', 'queen', 'eye'];
   var bossForm = null, bossFormCd = 0, bossSkillCd = 0;
@@ -5467,7 +5467,7 @@
     G.mode = 'playing';
     var bf = BOSS_FORM_DEFS[bossForm];
     player.r = 34;
-    showBanner('B O S S · ' + bf.name, '左键：' + bf.primary + ' · 空格：' + bf.skillName);
+    showBanner('B O S S · ' + bf.name, '左键：' + bf.primary + ' · 空格：' + bf.skillName + ' · X：自爆');
     sfx('victory');
   }
 
@@ -5488,21 +5488,21 @@
     var def = BOSS_FORM_DEFS[bossForm];
     if (def.primary === 'spread') {
       for (var i = -3; i <= 3; i++) bossShoot(a + i * 0.11, 6, 6, 520);
-      bossFormCd = 0.55;
+      bossFormCd = 0.42;
     } else if (def.primary === 'ring') {
       for (var j = 0; j < 16; j++) bossShoot(j * TAU / 16, 5, 5, 380);
-      bossFormCd = 1.1;
+      bossFormCd = 0.85;
     } else if (def.primary === 'triple') {
       bossShoot(a - 0.08, 8, 5, 700);
       bossShoot(a, 8, 5, 700);
       bossShoot(a + 0.08, 8, 5, 700);
-      bossFormCd = 0.38;
+      bossFormCd = 0.28;
     } else if (def.primary === 'fan') {
       for (var k = -4; k <= 4; k++) bossShoot(a + k * 0.16, 5, 5, 460);
-      bossFormCd = 0.8;
+      bossFormCd = 0.62;
     } else {
       bossShoot(a, 10, 9, 760, 5);
-      bossFormCd = 0.5;
+      bossFormCd = 0.38;
     }
     sfx('boomBig');
   }
@@ -5583,6 +5583,56 @@
         }
       }
     }
+  }
+
+  function startNuke() {
+    if (!G.bossMode || G.mode !== 'playing') return;
+    G.nukeT = 0;
+    G.mode = 'nuke';
+    stopBossMusic();
+    sfx('boomBig');
+    G.shake = 40;
+  }
+
+  function updateNuke(dt) {
+    G.nukeT += dt;
+    G.shake = Math.max(0, G.shake - dt * 6);
+    if (G.nukeT > 3.0) showBossEnding();
+  }
+
+  function drawNuke() {
+    var t = G.nukeT || 0;
+    ctx.save();
+    if (t < 0.35) {
+      ctx.fillStyle = 'rgba(255,255,255,' + Math.min(1, t / 0.12) + ')';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      return;
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    var p = Math.min(1, (t - 0.35) / 2.2);
+    var cx = W / 2, cy = H / 2;
+    var rad = p * Math.hypot(W, H) * 0.8;
+    var cell = 14;
+    var seedT = Math.floor(t * 24);
+    for (var y = 0; y < H; y += cell) {
+      for (var x = 0; x < W; x += cell) {
+        var d = Math.hypot(x + cell / 2 - cx, y + cell / 2 - cy);
+        if (d < rad) {
+          var n2 = Math.abs(Math.sin(x * 12.9898 + y * 78.233 + seedT * 1.7) * 43758.5453) % 1;
+          var col;
+          if (n2 < 0.18) col = '#ffffff';
+          else if (n2 < 0.38) col = '#ffe9a8';
+          else if (n2 < 0.58) col = '#ffb347';
+          else if (n2 < 0.8) col = '#ff5c2a';
+          else col = '#8c1a12';
+          ctx.fillStyle = col;
+          ctx.fillRect(x, y, cell - 1, cell - 1);
+        }
+      }
+    }
+    ctx.restore();
   }
 
   function showBossEnding() {
@@ -7695,6 +7745,7 @@
     } else if (G.hiddenRoom || G.bossMode || (MP.role === 'guest' && MP.hostBoss)) {
       drawMiniBadge(G.bossMode ? 'B O S S' : (MP.role === 'guest' ? '协 战' : '？？？？'), G.bossMode ? '#ff4d6d' : '#b9a8ff');
     }
+    if (G.mode === 'nuke') drawNuke();
     drawLoading();
     drawEmbedFlash();
     drawCleanupTimer();
@@ -7949,6 +8000,8 @@
       e.preventDefault();
       if (G.mode === 'bag') closeBag();
       else if (G.mode === 'playing' || G.mode === 'shop') openBag();
+    } else if (k === 'x') {
+      if (G.bossMode && G.mode === 'playing') startNuke();
     } else if (k === 'r') {
       reload();
     } else if (k === 'q') {
@@ -8780,6 +8833,8 @@
       }
     } else if (G.mode === 'embed') {
       updateEmbed(dt);
+    } else if (G.mode === 'nuke') {
+      updateNuke(dt);
     } else if (G.mode === 'dead' || G.mode === 'victory') updateEffects(dt);
 
     // 看门狗：处于模态状态但遮罩不可见 → 强制恢复，避免“看不见的暂停”
