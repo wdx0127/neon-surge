@@ -3637,6 +3637,7 @@
 
   function startStory() {
     if (G.mode === 'playing') return;
+    clearBossForm();
     initAudio();
     run = freshRun('story');
     G.runMode = 'story';
@@ -3651,6 +3652,7 @@
 
   function startEndless() {
     if (G.mode === 'playing') return;
+    clearBossForm();
     initAudio();
     run = freshRun('endless');
     G.runMode = 'endless';
@@ -3681,6 +3683,7 @@
 
   function toMenu() {
     clearTimeout(overTimer);
+    clearBossForm();
     G.mode = 'menu';
     bullets.length = 0;
     ebullets.length = 0;
@@ -4173,6 +4176,7 @@
   }
 
   function startDungeon() {
+    clearBossForm();
     G.runMode = 'endless';
     G.dungeon = null;
     G.hiddenRoom = false;
@@ -5271,6 +5275,7 @@
   }
 
   function openBag() {
+    if (G.bossMode) { popups.push({ x: player.x, y: player.y - 50, text: 'Boss 形态下无法整理背包', color: '#ff9fb4', life: 1.2, max: 1.2, size: 13, vy: -30 }); return; }
     if (G.mode !== 'playing' && G.mode !== 'shop') return;
     if (enemies.length || bosses.length || G.pending.length) {
       popups.push({ x: player.x, y: player.y - 44, text: '战斗中无法打开背包', color: '#ff9fb4', life: 1, max: 1, size: 13, vy: -30 });
@@ -5382,6 +5387,16 @@
     '“记得替我把灯关上。”',
     '“明天……还会有明天吗？”'
   ];
+
+  function clearBossForm() {
+    G.bossMode = false;
+    G.embedRun = false;
+    bossForm = null;
+    bossSkillCd = 0;
+    bossFormCd = 0;
+    G.bossLine = '';
+    G.bossLineT = 0;
+  }
 
   function startBossMode() {
     G.hiddenRoom = false;
@@ -7707,6 +7722,31 @@
     }
     ui.meleeCard.classList.toggle('cooling', meleeCd > 0 && !shieldUp && !fistCharging);
     ui.meleeBtn.classList.toggle('cooling', meleeCd > 0);
+
+    // ---- Boss 形态：替换武器卡 / 技能卡 ----
+    if (G.bossMode && bossForm) {
+      var bfd2 = BOSS_FORM_DEFS[bossForm];
+      var bsig = 'boss|' + bossForm + '|' + Math.ceil(bossSkillCd * 10);
+      if (hudCache.bossSig2 !== bsig) {
+        hudCache.bossSig2 = bsig;
+        ui.gunIcon.textContent = '王';
+        ui.gunName.textContent = bfd2.name;
+        ui.gunAmmo.textContent = '左键 · 普攻';
+        ui.gunCard.classList.remove('empty');
+        ui.meleeIcon.textContent = '技';
+        ui.meleeName.textContent = bfd2.skillName;
+        ui.meleeState.textContent = bossSkillCd > 0 ? ('冷却 ' + bossSkillCd.toFixed(1) + 's') : '就绪 · 空格';
+        ui.meleeBtn.textContent = '技';
+        ui.meleeFill.style.width = (bossSkillCd > 0 ? (1 - bossSkillCd / bfd2.cd) * 100 : 100) + '%';
+        ui.meleeCard.classList.remove('cooling');
+        ui.meleeCard.classList.remove('melee-fist');
+        ui.meleeCard.classList.remove('melee-shield');
+      }
+      $('bagBtn').classList.add('hidden');
+    } else {
+      if (hudCache.bossSig2) { hudCache.bossSig2 = ''; hudCache.gun = ''; hudCache.meleeSig = ''; }
+      $('bagBtn').classList.remove('hidden');
+    }
 
     // ---- 队友 ----
     var allySig = ally.active ? ('a' + ally.hp) : (run.allySpawned ? 'd' : 'n');
