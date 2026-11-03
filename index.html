@@ -5402,6 +5402,24 @@
   var BOSS_FORM_KEYS = ['butcher', 'goliath', 'reaper', 'queen', 'eye'];
   var bossForm = null, bossFormCd = 0, bossSkillCd = 0;
 
+  var bossMusicTimer = null, bossMusicStep = 0;
+  function startBossMusic() {
+    if (bossMusicTimer || !actx) return;
+    var seq = [146.83, 174.61, 207.65, 293.66, 311.13, 207.65, 174.61, 146.83, 138.59, 146.83, 207.65, 311.13];
+    bossMusicStep = 0;
+    bossMusicTimer = setInterval(function () {
+      if (!actx || muted) return;
+      var i = bossMusicStep % seq.length;
+      tone(seq[i], 0.09, 'square', 0.018);
+      if (bossMusicStep % 4 === 0) tone(seq[i] / 2, 0.18, 'triangle', 0.03);
+      if (bossMusicStep % 8 === 6) tone(seq[i] * 1.5 + rand(-4, 4), 0.07, 'sawtooth', 0.012);
+      bossMusicStep++;
+    }, 118);
+  }
+  function stopBossMusic() {
+    if (bossMusicTimer) { clearInterval(bossMusicTimer); bossMusicTimer = null; }
+  }
+
   var BOSS_LINES = [
     '“你们根本不懂我为什么这么做。”',
     '“这不是我想要的结局。”',
@@ -5411,6 +5429,7 @@
   ];
 
   function clearBossForm() {
+    stopBossMusic();
     G.bossMode = false;
     G.embedRun = false;
     bossForm = null;
@@ -5421,6 +5440,8 @@
   }
 
   function startBossMode() {
+    initAudio();
+    startBossMusic();
     G.hiddenRoom = false;
     G.bossMode = true;
     G.embedRun = true;
@@ -5531,13 +5552,15 @@
   }
 
   function updateBossMode(dt) {
+    if (pickups.length) pickups.length = 0;
     bossFormCd = Math.max(0, bossFormCd - dt);
     bossSkillCd = Math.max(0, bossSkillCd - dt);
     G.bossLineT -= dt;
     G.bossSpawnT -= dt;
-    if (G.bossSpawnT <= 0 && enemies.length < 14) {
-      G.bossSpawnT = Math.max(0.4, 1.2 - G.t * 0.0015);
+    if (G.bossSpawnT <= 0 && enemies.length < 34) {
+      G.bossSpawnT = Math.max(0.22, 0.6 - G.t * 0.0015);
       spawnEnemy(Math.random() < 0.45 ? 'kin' : 'hero');
+      if (Math.random() < 0.55) spawnEnemy(Math.random() < 0.5 ? 'hero' : 'kin');
     }
     if (G.bossLineT <= 0) {
       G.bossLine = BOSS_LINES[randi(0, BOSS_LINES.length - 1)];
@@ -5563,6 +5586,7 @@
   }
 
   function showBossEnding() {
+    stopBossMusic();
     G.mode = 'dead';
     if (MP.role === 'host' && MP.connected) MP.send({ t: 'bossdead' });
     var p2 = $('overPanel');
@@ -7642,8 +7666,7 @@
     drawLaser();
     drawAlly();
     drawShield();
-    drawPlayer();
-    drawBossForm();
+    if (G.bossMode) drawBossForm(); else drawPlayer();
     if (MP.role === 'guest' && MP.guestDead) {
       ctx.save();
       ctx.fillStyle = 'rgba(0,0,0,0.45)';
@@ -7657,7 +7680,7 @@
     }
     if (G.bossMode && G.bossLineT > 0 && G.bossLine) {
       var ba = G.bossLineT > 1.2 ? 1 : Math.max(0, G.bossLineT / 1.2);
-      drawBubble(player.x, player.y - 66, G.bossLine, ba);
+      drawBubble(player.x + rand(-3.5, 3.5), player.y - 66 + rand(-3.5, 3.5), G.bossLine, ba * (0.8 + 0.2 * Math.random()));
     }
     drawRemote();
     drawXray();
