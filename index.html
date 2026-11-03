@@ -5784,11 +5784,31 @@
     }
   }
 
+  function drawBloodBackground() {
+    var f = 0.5 + 0.5 * Math.sin(clock * 11) * Math.sin(clock * 3.7);
+    var flash = Math.random() < 0.07 ? 0.3 : 0;
+    ctx.save();
+    ctx.fillStyle = 'rgba(' + Math.round(72 + 58 * f) + ',0,' + Math.round(8 + 12 * f) + ',' + Math.min(1, 0.95 + flash) + ')';
+    ctx.fillRect(0, 0, W, H);
+    for (var i = 0; i < 14; i++) {
+      var y = (i * 61 + (clock * 280) % 61);
+      ctx.fillStyle = i % 2
+        ? 'rgba(255,0,30,' + (0.06 + 0.16 * f) + ')'
+        : 'rgba(0,0,0,0.22)';
+      ctx.fillRect(0, y, W, 3 + (i % 5));
+    }
+    var g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.22, W / 2, H / 2, Math.max(W, H) * 0.78);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(36,0,0,0.88)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+
   function drawHiddenRoom() {
     if (!G.hiddenRoom) return;
     ctx.save();
-    ctx.fillStyle = 'rgba(6,0,10,0.92)';
-    ctx.fillRect(0, 0, W, H);
+    drawBloodBackground();
     for (var i = 0; i < 26; i++) {
       var y = (i * 41 + (clock * 30) % 41);
       ctx.fillStyle = i % 2 ? 'rgba(255,0,80,0.05)' : 'rgba(0,255,180,0.04)';
@@ -7611,6 +7631,7 @@
     ctx.save();
     ctx.translate(sx, sy);
     if (G.hiddenRoom) drawHiddenRoom();
+    else if (G.bossMode) drawBloodBackground();
     drawPickups();
     drawEnemies();
     drawBosses();
