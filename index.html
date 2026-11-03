@@ -3984,6 +3984,7 @@
     var after = dlgAfter;
     dlgQueue = [];
     dlgAfter = null;
+    if (typeof after === 'function') { after(); return; }
     if (after === 'combat') enterCombat();
     else if (after === 'dungeon') startDungeon();
     else if (after === 'victory') showVictory();
@@ -4214,6 +4215,8 @@
     G.cleanupT = -1;
     G.roomCleared = false;
     G.hiddenRoom = false;
+    G.hiddenArmed = false;
+    G.hiddenChoice = false;
     waveCleared = false;
 
     player.x = W / 2;
@@ -4298,6 +4301,7 @@
   }
 
   function dungeonEdgeCheck(dt) {
+    if (G.hiddenRoom) return;
     var d = G.dungeon;
     if (!d || G.mode !== 'playing') return;
     d.moveCd = Math.max(0, d.moveCd - dt);
@@ -5314,12 +5318,14 @@
     pickups.length = 0;
     G.pending = [];
     G.waveDone = false;
-    player.x = W / 2;
-    player.y = H * 0.78;
+    player.x = W * 0.12;
+    player.y = H * 0.55;
     player.vx = 0;
     player.vy = 0;
     player.invuln = 2;
     G.mode = 'playing';
+    G.hiddenArmed = false;
+    G.hiddenChoice = false;
     hiddenSprites = [];
     for (var i = 0; i < 30; i++) {
       hiddenSprites.push({
@@ -5327,8 +5333,24 @@
         r: rand(14, 34), k: randi(0, 3), a: rand(0, 6)
       });
     }
-    showBanner('？？？？', 'YOU SHOULD NOT BE HERE');
     if (MP.role === 'host' && MP.connected) MP.send({ t: 'hidden' });
+    showBanner('？？？？', 'YOU SHOULD NOT BE HERE');
+    startDialogue([
+      { s: '你', t: '……这不是地牢里的房间。' },
+      { s: '？？？', t: '你终于来了。我等了很久。' },
+      { s: '你', t: '前面的台座上，有东西在呼吸。' }
+    ], function () {
+      G.mode = 'playing';
+      hideOverlay();
+      G.hiddenArmed = true;
+      showBanner('走近台座', '遗物在等你');
+      last = performance.now();
+    });
+  }
+
+  function showHiddenChoice() {
+    if (G.hiddenChoice) return;
+    G.hiddenChoice = true;
     if (MP.role === 'guest') {
       showChoice('？？？？？？', '房间中央的台座上放着一件遗物。它在呼吸。', [
         {
@@ -5803,6 +5825,14 @@
     ctx.rect(W / 2 - 34, H * 0.5 - 20, 68, 44);
     ctx.fill();
     ctx.stroke();
+    if (G.hiddenArmed && !G.hiddenChoice) {
+      ctx.globalAlpha = 0.65 + 0.3 * Math.sin(clock * 4);
+      ctx.fillStyle = '#ffd166';
+      ctx.font = '800 13px "Segoe UI", system-ui, "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('▲ 走近台座', W / 2, H * 0.5 - 54);
+      ctx.globalAlpha = 1;
+    }
     var pr = 10 + Math.sin(clock * 4) * 3;
     ctx.fillStyle = 'rgba(255,60,90,0.9)';
     ctx.shadowColor = '#ff3d5c';
@@ -6674,6 +6704,9 @@
     updatePickups(dt);
     updateParticles(dt);
     updatePopups(dt);
+    if (G.hiddenRoom && G.hiddenArmed && !G.hiddenChoice && Math.hypot(player.x - W / 2, player.y - H * 0.5) < 100) {
+      showHiddenChoice();
+    }
     dungeonEdgeCheck(dt);
     if (G.bossMode) updateBossMode(dt);
     updateRecruitBtn();
