@@ -368,6 +368,10 @@
     transition:.12s}
   .dropzone.over{background:rgba(255,60,90,.18);border-color:#ff3d5c;box-shadow:0 0 16px rgba(255,60,90,.35)}
   .mp-status{font-size:12px;color:#8fa6c4;margin:10px 0 14px;line-height:1.7;text-align:left}
+  .secret-row{display:flex;gap:8px;align-items:center;justify-content:center;margin:10px 0 2px}
+  #secretInput{width:120px;background:rgba(10,16,30,.75);border:1px solid rgba(120,170,255,.22);border-radius:9px;
+    color:#dff8ff;font-family:inherit;font-size:12px;padding:7px 9px;outline:none;text-align:center;letter-spacing:.2em}
+  #secretInput:focus{border-color:rgba(94,242,255,.6)}
   .mp-row{display:flex;gap:10px;margin-bottom:10px}
   .mp-row .btn{flex:1}
   .mp-input{width:100%;margin:0 0 12px;background:rgba(10,16,30,.85);border:1px solid rgba(120,170,255,.3);
@@ -566,6 +570,10 @@
         <div><b>Shift / 右键</b><span>冲刺（短暂无敌）</span></div>
         <div><b>P / Esc · M</b><span>暂停 · 静音</span></div>
         <div class="wide"><b>触屏</b><span>左半屏拖动移动 · 右下刀按钮 · 左下冲刺 · 自动开火 · 点卡片切武器</span></div>
+      </div>
+      <div class="secret-row">
+        <input id="secretInput" maxlength="8" placeholder="神秘代码" autocomplete="off" />
+        <button class="btn tiny" id="secretBtn">进入</button>
       </div>
       <div class="foot">无需安装 · 纯链接即玩 · 最高分 <b id="menuBest">0</b> · 最远 <b id="menuWave">0</b> 波</div>
     </div>
@@ -7836,6 +7844,28 @@
   $('shopBagBtn').addEventListener('click', function () { this.blur(); openBag(); });
 
   // 联机
+  function trySecretCode() {
+    var v = ($('secretInput').value || '').trim();
+    if (v !== '0127') {
+      sfx('deny');
+      $('secretInput').value = '';
+      $('secretInput').placeholder = '代码不对';
+      return;
+    }
+    hideOverlay();
+    G.runMode = 'endless';
+    if (!G.dungeon) genFloor(Math.max(1, G.stage || 1), false);
+    if (G.dungeon) G.dungeon.hiddenUsed = true;
+    G.mode = 'playing';
+    ui.hud.classList.add('show');
+    $('secretInput').value = '';
+    enterHiddenRoom();
+  }
+  $('secretBtn').addEventListener('click', function () { this.blur(); trySecretCode(); });
+  $('secretInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') trySecretCode();
+  });
+
   $('mpBtn').addEventListener('click', function () {
     this.blur();
     showOverlay('mpPanel');
